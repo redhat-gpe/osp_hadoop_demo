@@ -1,4 +1,112 @@
+:scrollbar:
+:data-uri:
+:toc2:
+:noaudio:
+
 = Provision the Hadoop Cluster using OpenStack Heat Lab
+
+:numbered:
+
+== Deploy Lab Environment
+
+=== Deploy in Red Hat Product Demo System
+
+. Log in to the Red Hat Product Demo System (RHPDS) portal at https://rhpds.redhat.com.
+. Go to *Services -> Catalogs*.
+. Under the *Service Catalogs* accordion, click *Community Cloud Demos -> Hadoop on OSP managed by CloudForms*.
+
+=== Order the Lab
+
+. Click *Order*.
+. Check the requested checkbox.
+. Take note of the *Expiration Date* and *Runtime*.
+. In the lower right corner, click *Submit* to finish ordering your environment.
+. In about 10 minutes, check your email for information about how to access your environment.
++
+[NOTE]
+It may take up to 30 minutes after you receive the email for the environment to become fully available via HTTP and HTTPS.
+
+=== Review Lab Environment
+
+. Wait for the environment to build.
+. Verify that your environment includes the following entities:
+* Bastion and NFS for Cinder
+* CloudForms Management Engine
+* Red Hat Enterprise Linux OpenStack Platform (all-in-one installation)
+
+[NOTE]
+The lab environment is cloud-based, so you can access it over the WAN from anywhere. However, do not expect its performance to match a bare-metal environment.
+
+== Access Lab Environment
+
+=== Set Up SSH
+
+To access your workstation system via SSH, use your personal OPENTLC SSO username and public SSH key.
+
+[NOTE]
+Unless otherwise noted, you cannot use SSH to connect directly as `root`.
+
+If you have not already done so, you must provide a public SSH key.
+
+. Go to https://www.opentlc.com/update and log in.
+. Paste your public key in the appropriate field.
+
+[TIP]
+For more information on generating an SSH key, see: https://www.opentlc.com/ssh.html
+
+=== Access Environment With SSH
+
+. Use SSH to remotely connect to the lab bastion host. Use your private SSH key and your OPENTLC SSO login:
++
+[subs="verbatim,macros"]
+----
+$ pass:quotes[*ssh -i path-to-your-ssh-key your-sso-login@demo-__GUID__.rhpds.opentlc.com*]
+----
++
+[NOTE]
+When entering commands, replace _GUID_ with your personal GUID, which is provided at the top of the lab provisioning email you received from Red Hat.
++
+[IMPORTANT]
+To avoid problems, _always_ use the *FQDN hostname* and _not_ the IP or Ravello DNS entry when using SSH to connect to your OPENTLC lab hosts.
+
+. Become `root` on the lab bastion host:
++
+[subs="verbatim,macros"]
+----
+$ pass:quotes[*sudo -i*]
+#
+----
+
+=== Using Kerberos Authentication Instead of SSH Keys (Advanced)
+
+If you are having problems using SSH keys, use Kerberos authentication instead. To do this you must be running on a UNIX/Linux or Mac OS X host.
+[NOTE]
+While Windows hosts support Kerberos, instructions for using Kerberos are not within the scope of this class.
+
+You must have the following settings in `/etc/krb5.conf` on your host (not in the lab environment):
+
+----
+dns_lookup_realm = true
+dns_lookup_kdc = true
+----
+
+. Use the following command to obtain a Kerberos ticket:
++
+[subs="verbatim,macros"]
+----
+$ pass:quotes[*kinit your-sso-login@OPENTLC.COM*]
+pass:quotes[*&lt;enter your OPENTLC SSO password>*]
+----
++
+[IMPORTANT]
+Capitalize all letters of "OPENTLC.COM", as shown.
+
+. Use SSH to remotely connect to your host without specifying the `-i` flag:
++
+[subs="verbatim,macros"]
+----
+$ pass:quotes[*ssh your-sso-login@demo-__GUID__.rhpds.opentlc.com*]
+----
 
 == Introduction
 
