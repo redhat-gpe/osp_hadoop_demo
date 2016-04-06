@@ -633,6 +633,8 @@ You can also mointor the state in Horizon by selecting the *Project* tab then *O
 ]
 ----
 
+== Access The Hadoop Node
+
 . From the Bastion host ssh into the `name-node1` VM
 +
 .Bastion Host
