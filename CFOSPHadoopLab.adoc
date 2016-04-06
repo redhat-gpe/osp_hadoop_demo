@@ -69,14 +69,6 @@ When entering commands, replace _GUID_ with your personal GUID, which is provide
 [IMPORTANT]
 To avoid problems, _always_ use the *FQDN hostname* and _not_ the IP or Ravello DNS entry when using SSH to connect to your OPENTLC lab hosts.
 
-. Become `root` on the lab bastion host:
-+
-[subs="verbatim,macros"]
-----
-$ pass:quotes[*sudo -i*]
-#
-----
-
 === Using Kerberos Authentication Instead of SSH Keys (Advanced)
 
 If you are having problems using SSH keys, use Kerberos authentication instead. To do this you must be running on a UNIX/Linux or Mac OS X host.
@@ -113,6 +105,22 @@ $ pass:quotes[*ssh your-sso-login@demo-__GUID__.rhpds.opentlc.com*]
 In this exercise you use Heat to send commands to `cloud-init` to
 configure multi instances to setup Hadoop cluster.
 
+== Log Into The Controller Node
+
+. SSH from the lab bastion host to the OpenStack Controller as the `root` user:
++
+.Bastion Host
+[subs="verbatim,macros"]
+----
+$ pass:quotes[*ssh root@osptokyo.example.com*]
+----
++
+[NOTE]
+Accept the SSH key when prompted.
++
+[NOTE]
+The root password is `r3dh4t1!`
+
 == Set Up Keystone As An Administrative User
 
 . Set up a shell to access Keystone as an administrative user:
@@ -138,6 +146,9 @@ file `/root/hadoop-image.qcow2`
   --file /root/hadoop-image.qcow2 --disk-format qcow2 \
   --container-format=bare --public hadoop-image
 ----
++
+[NOTE]
+This can take several minutes to complete.
 +
 .Sample Output
 ----
@@ -180,7 +191,7 @@ file `/root/hadoop-image.qcow2`
 +--------------------------------------+-------------------+
 ----
 
-. To see image details, run the following command:
+. To see image details, run the following command using the *ID* for `hadoop_image` from the output of the previous command:
 +
 .Controller Node
 ----
@@ -224,7 +235,7 @@ configure an instance to host Hadoop cluster.
 This includes enable SSH access between the Hadoop nodes and starting
 the Hadoop services.
 
-. Create the following `Hadoop.yaml` file on the controller node:
+. Examine the provided `Hadoop.yaml` file on the controller node:
 +
 .Hadoop.yaml
 ----
@@ -486,8 +497,7 @@ value: { get_attr: [floating_ip, floating_ip_address] }
 +
 .Controller Node
 ----
-[root@osptokyo ~(keystone_admin)]# heat stack-create -f ./Hadoop.yaml
-hadoop
+[root@osptokyo ~(keystone_admin)]# heat stack-create -f ./Hadoop.yaml hadoop
 ----
 +
 .Sample Output
@@ -535,6 +545,7 @@ You can see that the stack is in *CREATE_IN_PROGRESS* state
 
 . See the VMs that have been provisioned using the nova list command:
 +
+.Controller Node
 ----
 [root@osptokyo ~(keystone_admin)]# nova list
 ----
@@ -555,6 +566,7 @@ You can see that the stack is in *CREATE_IN_PROGRESS* state
 
 . List the network hadoop private network:
 +
+.Controller Node
 ----
 [root@osptokyo ~(keystone_admin)]# neutron net-list
 ----
@@ -572,23 +584,37 @@ You can see that the stack is in *CREATE_IN_PROGRESS* state
 
 == Working with Horizon
 
-. From the Horizon select the Project tab then Orchestration select *Stacks*
+. Go to https://osptokyo-__GUID__.rhpds.opentlc.com
++
+[NOTE]
+Dont forget to replace __GUID__ with your environment's GUID. (See email you received)
++
+[NOTE]
+Accept the SSL certificate.
++
+[IMPORTANT]
+User name is `admin` password is `r3dh4t1!`
+
+. In Horizon select the *Project* tab then *Orchestration -> Stacks*
 
 . Inspect the stack visualization.
 
-. Inspect the stack resources in the *Resource Types* tab.
+. Inspect the stack resources in the *Resource Types* tab above.
 
 . Once the stack has been deployed successfully you can verify this using
-the `heat stack-list` command and check if the stack is in *CREATE_COMPLETE* state
+the `heat stack-list` command on the controller node and check if the stack is in *CREATE_COMPLETE* state
 +
 [NOTE]
 The instantiation of the is cluster can take approximately 20
 minutes
-
++
+[NOTE]
+You can also mointor the state in Horizon by selecting the *Project* tab then *Orchestration -> Stacks*
 . Get the external IP address of the `name-node1`
 +
+.Controller Node
 ----
-[root@osptokyo ~(keystone_admin)]# heat output-show hadoop  --all
+[root@osptokyo ~(keystone_admin)]# heat output-show hadoop --all
 ----
 +
 .Sample Output
@@ -609,12 +635,14 @@ minutes
 
 . From the Bastion host ssh into the `name-node1` VM
 +
+.Bastion Host
 ----
 [root@demo-repl ~]# ssh cloud-user@10.2.1.83
 ----
 
 . Switch to user root  
 +
+.Node1
 ----
 root@name-node1:$ su -
 ----
