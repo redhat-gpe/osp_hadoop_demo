@@ -644,7 +644,7 @@ You can also mointor the state in Horizon by selecting the *Project* tab then *O
 
 . Switch to user root  
 +
-.Node1
+.Name-Node1
 ----
 root@name-node1:$ su -
 ----
@@ -652,7 +652,8 @@ root@name-node1:$ su -
 == Examine The Hadoop Cluster Topology
 
 . Switch to user `hdfs`
-
++
+.Name-Node1
 ----
 root@name-node1:$ su - hdfs
 hdfs@name-node1:~$ hdfs dfsadmin -printTopology
@@ -664,6 +665,7 @@ This job will print the number of occurrence for words in a file.
 
 . Become user `bob`:
 +
+.Name-Node1
 ----
 [hdfs@name-node1 ~]$ su - bob
 ----
@@ -673,18 +675,21 @@ Enter the password `r3dh4t1!`
 
 . Change to the `/tmp` directory:
 +
+.Name-Node1
 ----
 [bob@name-node1 ~]$ cd /tmp
 ----
 
 . Download an ebook as sample data:
 +
+.Name-Node1
 ----
 [bob@name-node1 ~]$  curl -O https://www.google.com/url?q=http://www.gutenberg.org/ebooks/20417.txt.utf-8&sa=D&ust=1459875707878000&usg=AFQjCNEMj6KYtB4BGqBqE-qUw4W6D1Ht4w[http://www.gutenberg.org/ebooks/20417.txt.utf-8]
 ----
 
 . Upload the ebook into *HDFS*:
 +
+.Name-Node1
 ----
 [bob@name-node1 ~]$ hdfs dfs -copyFromLocal /tmp/20417.txt.utf-8 \
   /user/bob/data
@@ -692,12 +697,14 @@ Enter the password `r3dh4t1!`
 
 . Verify that the file has been uploaded to *HDFS*:
 +
+.Name-Node1
 ----
 [bob@name-node1 ~]$ hadoop fs -tail /user/bob/data
 ----
 
 . Run the *MapReduce* `wordcount` job:
 +
+.Name-Node1
 ----
 [bob@name-node1 ~]$  hadoop jar \
   /usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.2.jar \
@@ -706,6 +713,7 @@ Enter the password `r3dh4t1!`
 
 . Examine the results of the *MapReduce* job:
 +
+.Name-Node1
 ----
 [bob@name-node1 ~]$ hadoop fs -cat /user/bob/data-out/part-r-00000
 ----
