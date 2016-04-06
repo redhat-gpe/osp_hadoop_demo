@@ -41,7 +41,7 @@ The lab environment is cloud-based, so you can access it over the WAN from anywh
 
 === Set Up SSH
 
-To access your workstation system via SSH, use your personal OPENTLC SSO username and public SSH key.
+To access your lab bastion host system via SSH, use your personal OPENTLC SSO username and public SSH key.
 
 [NOTE]
 Unless otherwise noted, you cannot use SSH to connect directly as `root`.
