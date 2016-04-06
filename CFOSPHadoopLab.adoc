@@ -635,28 +635,37 @@ You can also mointor the state in Horizon by selecting the *Project* tab then *O
 
 == Access The Hadoop Node
 
-. From the Bastion host ssh into the `name-node1` VM
+. Become root on the *bastion host* and SSH into the `name-node1` VM
 +
 .Bastion Host
 ----
-[root@demo-repl ~]# ssh cloud-user@10.2.1.83
+[your-sso@demo-GUID ~]$ sudo -i
+[root@demo-GUID ~]# ssh cloud-user@10.2.1.89
 ----
 
-. Switch to user root  
+. Switch to the `root` user on the Name-Node1 host:
 +
 .Name-Node1
 ----
-root@name-node1:$ su -
+root@name-node1:$ sudo -i
 ----
 
 == Examine The Hadoop Cluster Topology
 
-. Switch to user `hdfs`
+. Switch to `hdfs` user on the Name-Node1 host:
 +
 .Name-Node1
 ----
 root@name-node1:$ su - hdfs
 hdfs@name-node1:~$ hdfs dfsadmin -printTopology
+----
++
+.Sample Output
+----
+Rack: /default-rack
+   192.168.1.13:50010 (data-node1)
+   192.168.1.14:50010 (data-node2)
+   192.168.1.15:50010 (data-node3)
 ----
 
 == Run A Simple *MapReduce* Job
@@ -684,7 +693,7 @@ Enter the password `r3dh4t1!`
 +
 .Name-Node1
 ----
-[bob@name-node1 ~]$  curl -O https://www.google.com/url?q=http://www.gutenberg.org/ebooks/20417.txt.utf-8&sa=D&ust=1459875707878000&usg=AFQjCNEMj6KYtB4BGqBqE-qUw4W6D1Ht4w[http://www.gutenberg.org/ebooks/20417.txt.utf-8]
+[bob@name-node1 ~]$  curl -O https://www.google.com/url?q=http://www.gutenberg.org/ebooks/20417.txt.utf-8&sa=D&ust=1459875707878000&usg=AFQjCNEMj6KYtB4BGqBqE-qUw4W6D1Ht4w
 ----
 
 . Upload the ebook into *HDFS*:
