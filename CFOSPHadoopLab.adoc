@@ -1,0 +1,573 @@
+= Provision the Hadoop Cluster using OpenStack Heat Lab
+
+== Introduction
+
+In this exercise you use Heat to send commands to `cloud-init` to
+configure multi instances to setup Hadoop cluster.
+
+== Set Up Keystone As An Administrative User
+
+. Set up a shell to access Keystone as an administrative user:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# source /root/keystonerc_admin
+----
+
+== Upload The `hadoop-image` Into Glance
+
+By running the `openstack image create` command, you load that image into
+the Glance registry and mark it public to grant access to everyone.
+
+The image resides in the `/root` directory as a *qcow2*
+file `/root/hadoop-image.qcow2`
+
+. Create the Glance image:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# openstack image create \
+  --file /root/hadoop-image.qcow2 --disk-format qcow2 \
+  --container-format=bare --public hadoop-image
+----
++
+.Sample Output
+----
++------------------+------------------------------------------------------+
+| Field            | Value                                                |
++------------------+------------------------------------------------------+
+| checksum         | 486900b54f4757cb2d6b59d9bce9fe90                     |
+| container_format | bare                                                 |
+| created_at       | 2016-01-04T01:55:06Z                                 |
+| disk_format      | qcow2                                                |
+| file             | /v2/images/dac3bb3c-5daa-46b6-a236-d404b28b349b/file |
+| id               | dac3bb3c-5daa-46b6-a236-d404b28b349b                 |
+| min_disk         | 0                                                    |
+| min_ram          | 0                                                    |
+| name             | hadoop_image                                         |
+| owner            | a44b85a1110843bca62af1221b3c83bb                     |
+| protected        | False                                                |
+| schema           | /v2/schemas/image                                    |
+| size             | 474909696                                            |
+| status           | active                                               |
+| updated_at       | 2016-01-04T01:55:11Z                                 |
+| virtual_size     | None                                                 |
+| visibility       | public                                               |
++------------------+------------------------------------------------------+
+----
+
+. List the Glance images and verify you can see the image:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# openstack image list
+----
++
+.Sample Output
+----
++--------------------------------------+-------------------+
+| ID                                   | Name              |
++--------------------------------------+-------------------+
+| dac3bb3c-5daa-46b6-a236-d404b28b349b | hadoop_image      |
++--------------------------------------+-------------------+
+----
+
+. To see image details, run the following command:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# openstack image \
+  show dac3bb3c-5daa-46b6-a236-d404b28b349b
+----
++
+[NOTE]
+Your image id will be different.
++
+.Sample Output
+----
+ +------------------+-----------------------------------------------------+
+| Field            | Value                                                |
++------------------+------------------------------------------------------+
+| checksum         | 486900b54f4757cb2d6b59d9bce9fe90                     |
+| container_format | bare                                                 |
+| created_at       | 2016-01-04T01:55:06Z                                 |
+| disk_format      | qcow2                                                |
+| file             | /v2/images/dac3bb3c-5daa-46b6-a236-d404b28b349b/file |
+| id               | dac3bb3c-5daa-46b6-a236-d404b28b349b                 |
+| min_disk         | 0                                                    |
+| min_ram          | 0                                                    |
+| name             | rhel7_cloud_image                                    |
+| owner            | a44b85a1110843bca62af1221b3c83bb                     |
+| protected        | False                                                |
+| schema           | /v2/schemas/image                                    |
+| size             | 474909696                                            |
+| status           | active                                               |
+| updated_at       | 2016-01-04T01:55:11Z                                 |
+| virtual_size     | None                                                 |
+| visibility       | public                                               |
++------------------+------------------------------------------------------+
+----
+
+== Create The Heat Template
+
+In this exercise you use Heat to send commands to `cloud-init` to
+configure an instance to host Hadoop cluster.
+
+This includes enable SSH access between the Hadoop nodes and starting
+the Hadoop services.
+
+. Create the following `Hadoop.yaml` file on the controller node:
++
+.Hadoop.yaml
+----
+heat_template_version: 2013-05-23
+
+description: This template deploys an Hadoop cluster.
+
+parameters:
+  image:
+type: string
+label: Image name or ID
+description: Image to be used for the server.
+default: hadoop-image
+  flavor:
+type: string
+label: Flavor
+description: Type of instance (flavor) to be used on the compute instance.
+default: m1.medium
+  key:
+type: string
+label: Key name
+description: Name of key-pair to be installed on the compute instance.
+default: root-on-bastion
+  public_network:
+type: string
+label: Public network name or ID
+description: Public network with floating IP addresses.
+default: Public
+
+resources:
+  wait_condition:
+type: OS::Heat::WaitCondition
+properties:
+      handle: { get_resource: wait_handle }
+      count: 1
+      timeout: 2600
+
+  wait_handle:
+type: OS::Heat::WaitConditionHandle
+
+  private_network:
+type: OS::Neutron::Net
+
+  private_subnet:
+type: OS::Neutron::Subnet
+properties:
+      network_id: { get_resource: private_network }
+      cidr: 192.168.1.0/24
+      dns_nameservers:
+        - 8.8.8.8
+      enable_dhcp: True
+      name : Hadoop_network
+
+  router:
+type: OS::Neutron::Router
+properties:
+      external_gateway_info:
+        network: { get_param: public_network }
+
+  router_interface:
+type: OS::Neutron::RouterInterface
+properties:
+      router_id: { get_resource: router }
+      subnet: { get_resource: private_subnet }
+
+  name_node1_port:
+type: OS::Neutron::Port
+properties:
+      network_id: { get_resource: private_network }
+      fixed_ips: [ { 'ip_address': '192.168.1.10' } ]
+
+  name_node1:
+type: OS::Nova::Server
+properties:
+      name: name-node1
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      networks:
+        - port: { get_resource: name_node1_port }
+      user_data:
+        str_replace:
+          template: |
+            #!/bin/bash -v
+            su - hdfs -c "/usr/local/Scripts/testssh"
+            su - yarn -c "/usr/local/Scripts/testssh"
+            su - mapred -c "/usr/local/Scripts/testssh"
+            su - hdfs -c "hdfs namenode -format"
+            su - hdfs -c "start-dfs.sh"
+            su - hdfs -c "hadoop fs -mkdir /tmp"
+            su - hdfs -c "hadoop fs -chmod -R 1777 /tmp"
+            su - hdfs -c "hadoop fs -mkdir /user"
+            su - hdfs -c "hadoop fs -mkdir /user/history"
+            su - hdfs -c "hadoop fs -chmod -R 1777 /user/history"
+            su - hdfs -c "hadoop fs -chown yarn /user/history"
+            su - hdfs -c "hadoop fs -mkdir /var"
+            su - hdfs -c "hadoop fs -mkdir /var/log"
+            su - hdfs -c "hadoop fs -mkdir /var/log/hadoop-yarn"
+            su - hdfs -c "hadoop fs -chown yarn:mapred /var/log/hadoop-yarn"
+            su - hdfs -c "hadoop fs -mkdir /user/bob"
+            su - hdfs -c "hadoop fs -chown bob /user/bob"
+            su - hdfs -c "hadoop fs -ls -R /"
+            su - hdfs -c "stop-dfs.sh"
+
+            /usr/local/Scripts/startcluster
+
+            wc_notify --data-binary '{"status": "SUCCESS"}'
+
+          params:
+            wc_notify: { get_attr: ['wait_handle', 'curl_cli'] }
+
+  floating_ip:
+type: OS::Neutron::FloatingIP
+properties:
+      floating_network: { get_param: public_network }
+
+  floating_ip_assoc:
+type: OS::Neutron::FloatingIPAssociation
+properties:
+      floatingip_id: { get_resource: floating_ip }
+      port_id: { get_resource: name_node1_port }
+
+  name_node2_port:
+type: OS::Neutron::Port
+properties:
+      network_id: { get_resource: private_network }
+      fixed_ips: [ { 'ip_address': '192.168.1.11' } ]
+
+  name_node2:
+type: OS::Nova::Server
+properties:
+      name: name-node2
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      networks:
+        - port: { get_resource: name_node2_port }
+
+  resource_manager_port:
+type: OS::Neutron::Port
+properties:
+      network_id: { get_resource: private_network }
+      fixed_ips: [ { 'ip_address': '192.168.1.12' } ]
+
+  resource_manager:
+type: OS::Nova::Server
+properties:
+      name: resource_manager
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      networks:
+        - port: { get_resource: resource_manager_port }
+
+  data_node1_port:
+type: OS::Neutron::Port
+properties:
+      network_id: { get_resource: private_network }
+      fixed_ips: [ { 'ip_address': '192.168.1.13' } ]
+
+  data_node1:
+type: OS::Nova::Server
+properties:
+      name: data-node1
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      networks:
+        - port: { get_resource: data_node1_port }
+
+  data_node2_port:
+type: OS::Neutron::Port
+properties:
+      network_id: { get_resource: private_network }
+      fixed_ips: [ { 'ip_address': '192.168.1.14' } ]
+
+  data_node2:
+type: OS::Nova::Server
+properties:
+      name: data-node2
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      networks:
+        - port: { get_resource: data_node2_port }
+
+  data_node3_port:
+type: OS::Neutron::Port
+properties:
+      network_id: { get_resource: private_network }
+      fixed_ips: [ { 'ip_address': '192.168.1.15' } ]
+
+  data_node3:
+type: OS::Nova::Server
+properties:
+      name: data-node3
+      image: { get_param: image }
+      flavor: { get_param: flavor }
+      key_name: { get_param: key }
+      networks:
+        - port: { get_resource: data_node3_port }
+
+outputs:
+  instance_name:
+description: Name of the instance
+value: { get_attr: [name_node1, name] }
+  instance_ip:
+description: The IP address of the deployed instance
+value: { get_attr: [floating_ip, floating_ip_address] }
+----
+
+. Validate your heat template in order to check if the syntax is correct:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# heat template-validate \
+  -f ./Hadoop.yaml
+----
++
+.Sample Output
+----
+{
+  "Description": "This template deploys an Hadoop cluster.",
+  "Parameters": {
+"image": {
+      "Default": "hadoop-image",
+      "Type": "String",
+      "NoEcho": "false",
+      "Description": "Image to be used for the server.",
+      "Label": "Image name or ID"
+},
+"key": {
+      "Default": "root-on-bastion",
+      "Type": "String",
+      "NoEcho": "false",
+      "Description": "Name of key-pair to be installed on the compute instance.",
+      "Label": "Key name"
+},
+"public_network": {
+      "Default": "Public",
+      "Type": "String",
+      "NoEcho": "false",
+      "Description": "Public network with floating IP addresses.",
+      "Label": "Public network name or ID"
+},
+"flavor": {
+      "Default": "m1.medium",
+      "Type": "String",
+      "NoEcho": "false",
+      "Description": "Type of instance (flavor) to be used on the compute instance.",
+      "Label": "Flavor"
+}
+  }
+}
+
+----
+
+. Create your stack using parameters that reflect your environment based on this example:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# heat stack-create -f ./Hadoop.yaml
+hadoop
+----
++
+.Sample Output
+----
++--------------------------------------+------------+--------------------+---------------------+--------------+
+| id                                   | stack_name | stack_status       | creation_time       | updated_time |
++--------------------------------------+------------+--------------------+---------------------+--------------+
+| 2487356d-1edd-42dd-aab2-16668d548f3f | hadoop     | CREATE_IN_PROGRESS | 2016-03-23T14:00:01 | None         |
++--------------------------------------+------------+--------------------+---------------------+--------------+
+----
++
+You can see that the stack is in *CREATE_IN_PROGRESS* state
+
+. Get more information about the stack:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# heat stack-show hadoop
+----
++
+.Sample Output
+----
++-----------------------+-------------------------------------------+
+| Property              | Value                                     |
++-----------------------+-------------------------------------------+
+| capabilities          | []                                        |
+| creation_time         | 2016-03-17T12:25:45                       |
+| description           | This template deploys an Hadoop cluster.  |
+| disable_rollback      | False                                     |
+| id                    | 4fdf6b81-de77-4850-9a9f-74bc1cf9fe67      |
+| links                 | http://10.2.0.10:8004/v1/1db907f16f4e4d979610a14cd4f3b7af/stacks/Hadoop/4fdf6b81-de77-4850-9a9f-74bc1cf9fe67 (self) |
+| notification_topics   | []                                        |
+ ...OUTPUT TRUNCATED...
+| stack_name            | Hadoop                                    |
+| stack_owner           | admin                                     |
+| stack_status          | CREATE_COMPLETE                           |
+| stack_status_reason   | Stack CREATE completed successfully       |
+| stack_user_project_id | fafc3ef860d743f0a85f2755b9fd572f          |
+| tags                  | None                                      |
+| template_description  | This template deploys an Hadoop cluster.  |
+| timeout_mins          | 2600                                      |
+| updated_time          | None                                      |
++-----------------------+-------------------------------------------+
+----
+
+. See the VMs that have been provisioned using the nova list command:
++
+----
+[root@osptokyo ~(keystone_admin)]# nova list
+----
++
+.Sample Output
+----
++--------------------------------------+-------------------+---------+------------+-------------+-------------------------------------------------------------+
+| ID                                   | Name              | Status  | Task State | Power State | Networks                                                    |
++--------------------------------------+-------------------+---------+------------+-------------+-------------------------------------------------------------+
+| b7622119-eae7-4631-8c8a-0d0d4a7f7b23 | data-node1        | ACTIVE  | -          | Running     | hadoop-private_network-ekllw75h3g3y=192.168.1.13            |
+| 0d6137b9-5c8e-4925-a745-fee7a734ac6c | data-node2        | ACTIVE  | -          | Running     | hadoop-private_network-ekllw75h3g3y=192.168.1.14            |
+| e671d0ac-8e68-4d22-832d-0a4803282116 | data-node3        | ACTIVE  | -          | Running     | hadoop-private_network-ekllw75h3g3y=192.168.1.15
+| e6a22bd5-d0af-4cef-b2d1-07377ffacedd | name-node1        | ACTIVE  | -          | Running     | hadoop-private_network-ekllw75h3g3y=192.168.1.10, 10.2.1.95 |
+| 266edd5e-9f06-4b4e-9461-98c459122ace | name-node2        | ACTIVE  | -          | Running     | hadoop-private_network-ekllw75h3g3y=192.168.1.11            |
+| 66ca096f-e01b-40d5-9fb5-80d72b2d5c70 | resource_manager  | ACTIVE  | -          | Running     | hadoop-private_network-ekllw75h3g3y=192.168.1.12            |
++--------------------------------------+-------------------+---------+------------+-------------+-------------------------------------------------------------+
+----
+
+. List the network hadoop private network:
++
+----
+[root@osptokyo ~(keystone_admin)]# neutron net-list
+----
++
+.Sample Output
+----
++--------------------------------------+-------------------------------------+-----------------------------------------------------+
+| id                                   | name                                | subnets                                             |
++--------------------------------------+-------------------------------------+-----------------------------------------------------+
+| 921154da-8ccd-426a-973a-c9e663b83d73 | Public                              | 017ca4e0-f4b0-45df-8d43-9707d80f4241 10.2.0.0/16    |
+| 5bc843a0-344e-4bed-a0c4-356078f389cd | Private                             | 6a12e63b-85e7-49c3-a51d-284e2b13ec32 172.16.0.0/24  |
+| da9271a2-8805-412e-a04d-5a915b48dd50 | hadoop-private_network-ekllw75h3g3y | 49545445-43fb-41f7-ad91-1ad86eb42752 192.168.1.0/24 |
++--------------------------------------+-------------------------------------+-----------------------------------------------------+
+----
+
+== Working with Horizon
+
+. From the Horizon select the Project tab then Orchestration select *Stacks*
+
+. Inspect the stack visualization.
+
+. Inspect the stack resources in the *Resource Types* tab.
+
+. Once the stack has been deployed successfully you can verify this using
+the `heat stack-list` command and check if the stack is in *CREATE_COMPLETE* state
++
+[NOTE]
+The instantiation of the is cluster can take approximately 20
+minutes
+
+. Get the external IP address of the `name-node1`
++
+----
+[root@osptokyo ~(keystone_admin)]# heat output-show hadoop  --all
+----
++
+.Sample Output
+----
+[
+  {
+"output_value": "name-node1",
+"description": "Name of the instance",
+"output_key": "instance_name"
+  },
+  {
+"output_value": "10.2.1.89",
+"description": "The IP address of the deployed instance",
+"output_key": "instance_ip"
+  }
+]
+----
+
+. From the Bastion host ssh into the `name-node1` VM
++
+----
+[root@demo-repl ~]# ssh cloud-user@10.2.1.83
+----
+
+. Switch to user root  
++
+----
+root@name-node1:$ su -
+----
+
+== Examine The Hadoop Cluster Topology
+
+. Switch to user `hdfs`
+
+----
+root@name-node1:$ su - hdfs
+hdfs@name-node1:~$ hdfs dfsadmin -printTopology
+----
+
+== Run A Simple *MapReduce* Job
+
+This job will print the number of occurrence for words in a file.
+
+. Become user `bob`:
++
+----
+[hdfs@name-node1 ~]$ su - bob
+----
++
+[NOTE]
+Enter the password `r3dh4t1!`
+
+. Change to the `/tmp` directory:
++
+----
+[bob@name-node1 ~]$ cd /tmp
+----
+
+. Download an ebook as sample data:
++
+----
+[bob@name-node1 ~]$  curl -O https://www.google.com/url?q=http://www.gutenberg.org/ebooks/20417.txt.utf-8&sa=D&ust=1459875707878000&usg=AFQjCNEMj6KYtB4BGqBqE-qUw4W6D1Ht4w[http://www.gutenberg.org/ebooks/20417.txt.utf-8]
+----
+
+. Upload the ebook into *HDFS*:
++
+----
+[bob@name-node1 ~]$ hdfs dfs -copyFromLocal /tmp/20417.txt.utf-8 \
+  /user/bob/data
+----
+
+. Verify that the file has been uploaded to *HDFS*:
++
+----
+[bob@name-node1 ~]$ hadoop fs -tail /user/bob/data
+----
+
+. Run the *MapReduce* `wordcount` job:
++
+----
+[bob@name-node1 ~]$  hadoop jar \
+  /usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.2.jar \
+  wordcount /user/bob/data /user/bob/data-out
+----
+
+. Examine the results of the *MapReduce* job:
++
+----
+[bob@name-node1 ~]$ hadoop fs -cat /user/bob/data-out/part-r-00000
+----
