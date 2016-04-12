@@ -1,0 +1,400 @@
+= Provision the Hadoop Cluster using OpenStack Heat and CloudForms Lab
+
+== Lab Overview
+
+In this lab you will provision Hadoop cluster using OpenStack heat and CloudForms.
+
+== Deploy Lab Environment
+
+. Deploy in Red Hat Product Demo System
+.. Log in to the Red Hat Product Demo System (RHPDS) portal at https://rhpds.redhat.com.
+.. Go to *Services -> Catalogs*.
+.. Under the *Service Catalogs* accordion, click *Community Cloud Demos -> Hadoop on OSP managed by CloudForms*.
+
+. Order the Lab
+.. Click *Order*.
+.. Check the requested checkbox.
+.. Take note of the Expiration Date and Runtime.
+.. In the lower right corner, click Submit to finish ordering your environment.
+.. In about 10 minutes, check your email for information about how to access your environment.
+[NOTE]
+It may take up to 30 minutes after you receive the email for the environment to become fully available via HTTP and HTTPS.
+
+. Review Lab Environment
+.. Wait for the environment to build.
+.. Verify that your environment includes the following entities:
+* Bastion and NFS for Cinder
+* CloudForms Management Engine
+* Red Hat Enterprise Linux OpenStack Platform (all-in-one installation)
+[NOTE]
+The lab environment is cloud-based, so you can access it over the WAN from anywhere. However, do not expect its performance to match a bare-metal environment.
+
+== Access Lab Environment
+
+. Set Up SSH
+
+.. To access your lab bastion host system via SSH, use your personal OPENTLC SSO username and public SSH key.
++
+[NOTE]
+Unless otherwise noted, you cannot use SSH to connect directly as root.
+
+.. If you have not already done so, you must provide a public SSH key.
+... Go to https://www.opentlc.com/update and log in.
+... Paste your public key in the appropriate field.
++
+[TIP]
+For more information on generating an SSH key, see: https://www.opentlc.com/ssh.html
+
+. Access Environment With SSH
+
+.. Use SSH to remotely connect to the lab bastion host. Use your private SSH key and your
++
+.OPENTLC SSO login:
+----
+$ ssh -i path-to-your-ssh-key your-sso-login@demo-GUID.rhpds.opentlc.com
+----
++
+[NOTE]
+When entering commands, replace GUID with your personal GUID, which is provided at the top of the lab provisioning email you received from Red Hat.
++
+[IMPORTANT]
+To avoid problems, always use the FQDN hostname and not the IP or Ravello DNS entry when using SSH to connect to your OPENTLC lab hosts.
+
+. Using Kerberos Authentication Instead of SSH Keys (Advanced)
+
+If you are having problems using SSH keys, use Kerberos authentication instead. To do this you must be running on a UNIX/Linux or Mac OS X host.
+
+[NOTE]
+While Windows hosts support Kerberos, instructions for using Kerberos are not within the scope of this class.
+
+You must have the following settings in `/etc/krb5.conf` on your host (not in the lab environment):
+
+----
+dns_lookup_realm = true
+dns_lookup_kdc = true
+----
+
+.. Use the following command to obtain a Kerberos ticket:
++
+----
+$ kinit your-sso-login@OPENTLC.COM
+<enter your OPENTLC SSO password>
+----
++
+[IMPORTANT]
+Capitalize all letters of "OPENTLC.COM", as shown.
+
+.. Use SSH to remotely connect to your host without specifying the -i flag:
++
+----
+$ ssh your-sso-login@demo-GUID.rhpds.opentlc.com
+----
+
+== Log Into The Controller Node
+
+. SSH from the lab bastion host to the OpenStack Controller as the root user:
++
+.Bastion Host
+----
+$ ssh root@osptokyo.example.com
+----
++
+[NOTE]
+Accept the SSH key when prompted.
++
+[NOTE]
+The root password is `r3dh4t1!`
+
+== Set Up Keystone As An Administrative User
+
+. Set up a shell to access Keystone as an administrative user:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# source /root/keystonerc_admin
+----
+
+== Upload The hadoop-image Into Glance
+
+By running the `openstack image create command`, you load that image into the Glance registry and mark it public to grant access to everyone.
+The image resides in the `/root` directory as a *qcow2* file `/root/hadoop-image.qcow2`
+
+. Create the Glance image:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# openstack image create \
+ --file /root/hadoop-image.qcow2 --disk-format qcow2 \
+ --container-format=bare --public hadoop-image
+----
+[NOTE]
+This can take several minutes to complete.
++
+.Sample Output
+----
++------------------+------------------------------------------------------+
+| Field            | Value                                                |
++------------------+------------------------------------------------------+
+| checksum         | 486900b54f4757cb2d6b59d9bce9fe90                     |
+| container_format | bare                                                 |
+| created_at       | 2016-01-04T01:55:06Z                                 |
+| disk_format      | qcow2                                                |
+| file             | /v2/images/dac3bb3c-5daa-46b6-a236-d404b28b349b/file |
+| id               | dac3bb3c-5daa-46b6-a236-d404b28b349b                 |
+| min_disk         | 0                                                    |
+| min_ram          | 0                                                    |
+| name             | hadoop_image                                         |
+| owner            | a44b85a1110843bca62af1221b3c83bb                     |
+| protected        | False                                                |
+| schema           | /v2/schemas/image                                    |
+| size             | 474909696                                            |
+| status           | active                                               |
+| updated_at       | 2016-01-04T01:55:11Z                                 |
+| virtual_size     | None                                                 |
+| visibility       | public                                               |
++------------------+------------------------------------------------------+
+----
+
+. List the Glance images and verify you can see the image:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# openstack image list
+Sample Output
++--------------------------------------+-------------------+
+| ID                                   | Name              |
++--------------------------------------+-------------------+
+| dac3bb3c-5daa-46b6-a236-d404b28b349b | hadoop_image      |
++--------------------------------------+-------------------+
+----
+
+. To see image details, run the following command using the ID for hadoop_image from the output of the previous command:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# openstack image \
+ show dac3bb3c-5daa-46b6-a236-d404b28b349b
+----
++
+[NOTE]
+Your image id will be different.
++
+.Sample Output
+----
++------------------+------------------------------------------------------+
+| Field            | Value                                                |
++------------------+------------------------------------------------------+
+| checksum         | 486900b54f4757cb2d6b59d9bce9fe90                     |
+| container_format | bare                                                 |
+| created_at       | 2016-01-04T01:55:06Z                                 |
+| disk_format      | qcow2                                                |
+| file             | /v2/images/dac3bb3c-5daa-46b6-a236-d404b28b349b/file |
+| id               | dac3bb3c-5daa-46b6-a236-d404b28b349b                 |
+| min_disk         | 0                                                    |
+| min_ram          | 0                                                    |
+| name             | rhel7_cloud_image                                    |
+| owner            | a44b85a1110843bca62af1221b3c83bb                     |
+| protected        | False                                                |
+| schema           | /v2/schemas/image                                    |
+| size             | 474909696                                            |
+| status           | active                                               |
+| updated_at       | 2016-01-04T01:55:11Z                                 |
+| virtual_size     | None                                                 |
+| visibility       | public                                               |
++------------------+------------------------------------------------------+
+----
+
+== Create Role
+
+. Log into your CloudForms appliance at https://cf-GUID.rhpds.opentlc.com with the admin user with password `r3dh4t1!`.
++
+[NOTE]
+Replace GUID with your lab's GUID (see the e-mail you received from the OPENTLC lab system).
+
+== Check Provider Status (Workaround)
+[WARNING]
+For some reason in CloudForms 4.0 GA, if the appliance loses connection to its providers, it will not automatically re-establish a connection.
+
+If your lab environment has been started for the first time or if it was shut down due to the auto-shutdown you must perform the following procedure to reestablish communication to your providers or your labs will not work:
+
+. Go to *(Cloud or Infrastructure) -> Providers*
+. If you see any providers with a *!* in the bottom right quadrant, you will have to re-establish connectivity.
+. Click the provider, then go to *Configuration -> Edit this (Cloud or Infrastructure) Provider*.
+. In the next screen click the blue *Validate* button.
+. Click *Cancel*.
+
+[NOTE]
+Repeat this for any other disconnected providers.
+
+[IMPORTANT]
+Make sure you do this check if your lab environment is ever shut down (at the beginning of the day).
+
+== Create new Service Catalog
+
+. Go to *Services -> Catalogs*.
+. On the left side, click the *Catalogs* accordion.
+. Click *Configuration -> Add a New Catalog*.
+. For *Name* enter `Hadoop`.
+. For *Description* enter `Hadoop Cluster`.
+. At the bottom right click *Add*.
+
+== Create new Orchestration Template
+
+. On the left side, click the *Orchestration Templates* accordion.
+. From the pull down menu for *All Orchestration Templates* select *Heat Templates*.
+. Click *Configuration -> Create new Orchestration Template*.
+. For *Name* enter `Hadoop`.
+. For *Description* enter `Hadoop Template`.
+. Copy the contents of the `/root/Hadoop.yaml` file from the Controller Node (*osptokyo.example.com*) and paste it.
+. At the bottom right click *Add*.
+
+== Create new Catalog Item
+
+. On the left side, click the *Catalog Items* accordion.
+. Click *Configuration -> Create Service Dialog from Orchestration Template*.
+. For *Service Dialog Name* enter `Hadoop`.
+. At the bottom right click *Save*.
+. From the pull down menu for *All Catalog Items* select *Hadoop*.
+. Click *Configuration -> Add a New Catalog Item*.
+. For *Catalog Item Type* select *Orchestration*.
+. For *Name / Description* enter `Hadoop` and `Hadoop cluster`.
+. Make sure *Display in Catalog* is *checked*.
+. For *Catalog* choose *Hadoop*.
+. For *Dialog* choose *Hadoop*.
+. For *Orchestration Template* choose *Hadoop*.
+. For *Provider* choose *osptokyo.example.com*.
+. At the bottom right click *Add*.
+
+== Order the service
+
+. On the left side, click the *Service Catalogs* accordion.
+. Click the *All Services* accordion.
+. Click the *Hadoop* accordion.
+. On the left side, click *Order*.
+. For *Tenant* choose *admin*.
+. For *Stack Name* enter *Hadoop*.
+. For *On Failure* choose *Rollback*.
+. For *Timeout* enter `2000`.
+. Leave the *Parameters* section with default values.
+. Click *Submit*.
+. On the resulting screen, click the *Refresh Icon* (in the CloudForms UI, not the browser) until *Last Message* reads: *Service Provisioned Successfully*
++
+[NOTE]
+The instantiation of the is cluster can take approximately 20 minutes
+
+. Get the external IP address of the name-node1:
++
+.Controller Node
+----
+[root@osptokyo ~(keystone_admin)]# heat output-show hadoop --all
+----
++
+.Sample Output
+----
+[
+ {
+"output_value": "name-node1",
+"description": "Name of the instance",
+"output_key": "instance_name"
+ },
+ {
+"output_value": "10.2.1.89",
+"description": "The IP address of the deployed instance",
+"output_key": "instance_ip"
+ }
+]
+----
+
+== Examine The Hadoop Cluster Topology
+
+. Access The Hadoop Node
+
+.. Become root on the *bastion host* and SSH into the `name-node1` VM
++
+.Bastion Host
+----
+[your-sso@demo-GUID ~]$ sudo -i
+[root@demo-GUID ~]# ssh cloud-user@10.2.1.89
+----
+
+. Switch to the `root` user on the Name-Node1 host:
++
+.Name-Node1
+----
+root@name-node1:$ sudo -i
+----
+
+. Switch to `hdfs` user on the Name-Node1 host:
++
+.Name-Node1
+----
+root@name-node1:$ su - hdfs
+hdfs@name-node1:~$ hdfs dfsadmin -printTopology
+----
++
+.Sample Output
+----
+Rack: /default-rack
+   192.168.1.13:50010 (data-node1)
+   192.168.1.14:50010 (data-node2)
+   192.168.1.15:50010 (data-node3)
+----
+
+== Run A Simple *MapReduce* Job
+
+This job will print the number of occurrence for words in a file.
+
+. Become user `bob`:
++
+.Name-Node1
+----
+[hdfs@name-node1 ~]$ su - bob
+----
++
+[NOTE]
+Enter the password `r3dh4t1!`
+
+. Change to the `/tmp` directory:
++
+.Name-Node1
+----
+[bob@name-node1 ~]$ cd /tmp
+----
+
+. Download an ebook as sample data:
++
+.Name-Node1
+----
+[bob@name-node1 ~]$  curl -O https://www.google.com/url?q=http://www.gutenberg.org/ebooks/20417.txt.utf-8&sa=D&ust=1459875707878000&usg=AFQjCNEMj6KYtB4BGqBqE-qUw4W6D1Ht4w
+----
+
+. Upload the ebook into *HDFS*:
++
+.Name-Node1
+----
+[bob@name-node1 ~]$ hdfs dfs -copyFromLocal /tmp/20417.txt.utf-8 \
+  /user/bob/data
+----
+
+. Verify that the file has been uploaded to *HDFS*:
++
+.Name-Node1
+----
+[bob@name-node1 ~]$ hadoop fs -tail /user/bob/data
+----
+
+. Run the *MapReduce* `wordcount` job:
++
+.Name-Node1
+----
+[bob@name-node1 ~]$  hadoop jar \
+  /usr/local/hadoop/share/hadoop/mapreduce/hadoop-mapreduce-examples-2.7.2.jar \
+  wordcount /user/bob/data /user/bob/data-out
+----
+
+. Examine the results of the *MapReduce* job:
++
+.Name-Node1
+----
+[bob@name-node1 ~]$ hadoop fs -cat /user/bob/data-out/part-r-00000
+----
